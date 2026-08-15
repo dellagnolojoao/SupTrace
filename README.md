@@ -1,6 +1,7 @@
 # SupTrace
 
 Ferramenta interna para otimizar a análise de falhas no suporte e o reporte de erros para a P&D.
+
 Com apenas dois cliques, o usuário reproduz o problema em um navegador controlado pela ferramenta e o SupTrace:
 
 - **Grava a tela** durante todo o teste (vídeo `.webm`, acelerado em 1.5×);
@@ -40,7 +41,7 @@ python suptrace.py
 
 Na primeira execução, o SupTrace baixa automaticamente o Chromium necessário (via Playwright) para a pasta `%LOCALAPPDATA%\SupTrace\browsers`.
 
-> ⚠️ O script solicita elevação de privilégio (UAC) ao iniciar (`_elevar()`), reabrindo-se como administrador. Isso é necessário para [descrever aqui o motivo específico no seu ambiente, ex.: gravar a tela corretamente / gerar a pasta em `C:\Temp` / etc.]. Revise esse comportamento antes de distribuir a ferramenta para usuários finais.
+> ℹ️ O script solicita elevação de privilégio (UAC) ao iniciar (`_elevar()`), reabrindo-se como administrador. Isso evita problemas de permissão na execução (gravação de tela, escrita em `C:\Temp`, instalação do Chromium etc.) nos diferentes ambientes dos usuários finais.
 
 ## Gerando o executável (.exe)
 
@@ -73,18 +74,10 @@ Cada gravação produz, em `C:\Temp`:
 └── <timestamp>_video[_1.5x].webm  # Gravação da tela
 ```
 
-## Aviso de privacidade e segurança
+## Privacidade
 
-O relatório de rede inclui **headers, payloads e corpos de resposta completos** das requisições capturadas durante a gravação. Isso pode incluir tokens de autenticação, dados pessoais ou informações sensíveis do ambiente testado. Recomenda-se:
-
-- Orientar os usuários a evitar reproduzir cenários com dados sensíveis desnecessários antes de enviar o `.zip`;
-- Definir um processo interno de retenção/exclusão dos arquivos gerados em `C:\Temp` e enviados à P&D;
-- Revisar se a elevação de privilégios (admin) é de fato necessária para o caso de uso antes de distribuir amplamente.
+O SupTrace roda 100% localmente na máquina do usuário: a gravação de tela, a captura de rede e a geração do relatório acontecem no próprio computador, e o `.zip` resultante fica em `C:\Temp` até ser enviado manualmente à equipe técnica. Nenhum dado é enviado a servidores externos pela ferramenta em si.
 
 ## Contribuindo
 
-Sugestões, dúvidas e contribuições sobre o código são bem-vindas.
-
-## Licença
-
-Open Source
+Sugestões, dúvidas e contribuições sobre o código são bem-vindas — abra uma *issue* ou um *pull request*.
