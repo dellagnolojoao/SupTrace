@@ -31,7 +31,7 @@ O objetivo é eliminar a necessidade de solicitar prints, acesso remoto ou orien
 ## Instalação (modo desenvolvimento)
 
 ```bash
-git clone https://github.com/<seu-usuario>/SupTrace.git
+git clone https://github.com/dellagnolojoao/SupTrace.git
 cd SupTrace
 python -m venv venv
 venv\Scripts\activate
