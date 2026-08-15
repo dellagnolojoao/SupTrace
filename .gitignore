@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Playwright browsers (baixados em runtime, não versionar)
+.playwright-browsers/
+ms-playwright/
+
+# Artefatos gerados pela ferramenta em tempo de execução
+*.har
+*.webm
+*.zip
+C:/Temp/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.iml
