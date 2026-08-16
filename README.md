@@ -9,7 +9,7 @@ Com apenas dois cliques, o usuário reproduz o problema em um navegador controla
 - **Gera um relatório HTML interativo** a partir do HAR, com endpoints, métodos HTTP, status, headers, payloads, respostas completas e tempos de resposta — filtrável diretamente no navegador;
 - **Compacta tudo em um único `.zip`**, salvo em `C:\Temp`, pronto para ser enviado à equipe técnica.
 
-O objetivo é eliminar a necessidade de solicitar prints, acesso remoto ou orientações de F12 ao usuário para diagnosticar se uma falha está na aplicação, na integração ou na infraestrutura — um diferencial em relação ao antigo NavegaLog.
+O objetivo é eliminar a necessidade de solicitar prints, acesso remoto ou orientações de F12 ao usuário para diagnosticar se uma falha está na aplicação, na integração ou na infraestrutura.
 
 ## Como funciona
 
