@@ -1,2 +1,16 @@
+# ─── SupTrace v1.1 — Dependências ────────────────────────────────────────────
+# Instale com: pip install -r requirements.txt
+# Testado com Python 3.10+, Windows 10/11
+
+# Automação do navegador (Google Chrome / Microsoft Edge via channel)
+# Responsável pela captura de HAR e gravação de vídeo via Playwright
 playwright>=1.44.0
+
+# Binário portátil do ffmpeg — usado para:
+#   1. Acelerar e normalizar o vídeo gravado (1.5×)
+#   2. Ser copiado automaticamente ao diretório do Playwright na execução do .exe
 imageio-ffmpeg>=0.5.1
+
+# ─── Build (apenas para recompilar o .exe) ────────────────────────────────────
+# Descomente se precisar gerar um novo executável:
+# pyinstaller>=6.0.0
