@@ -1,7 +1,7 @@
 import ctypes
 import sys
 
-# ✅ ELEVAÇÃO DE PRIVILÉGIOS
+# ✅ ELEVAÇÃO DE PRIVILÉGIOS — deve ser o primeiro bloco executado
 def _is_admin() -> bool:
     try:
         return bool(ctypes.windll.shell32.IsUserAnAdmin())
@@ -17,17 +17,18 @@ if not _is_admin():
     _elevar()
 
 # ─────────────────────────────────────────────────────────────────────────────
-
+# ✅ PLAYWRIGHT_BROWSERS_PATH — definido antes de qualquer import do playwright.
+#    Aponta para um diretório persistente e gravável onde o ffmpeg será
+#    copiado do imageio-ffmpeg na primeira execução do .exe.
 import os
-import re
 
-# ✅ FIX PYINSTALLER — antes de qualquer import do playwright
-_BROWSERS_PATH = os.path.join(
+_PW_BROWSERS_PATH = os.path.join(
     os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
-    "SupTrace", "browsers",
+    "SupTrace", "pw-browsers",
 )
-os.makedirs(_BROWSERS_PATH, exist_ok=True)
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = _BROWSERS_PATH
+os.makedirs(_PW_BROWSERS_PATH, exist_ok=True)
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = _PW_BROWSERS_PATH
+# ─────────────────────────────────────────────────────────────────────────────
 
 import asyncio
 import threading
@@ -38,7 +39,6 @@ import json
 import html as html_lib
 import subprocess
 import tkinter as tk
-import tkinter.ttk as ttk
 from tkinter import messagebox
 from datetime import datetime
 from urllib.parse import urlparse
@@ -58,8 +58,22 @@ VIDEO_W        = 1920
 VIDEO_H        = 1080
 HAR_SKIP_TYPES = {"image", "stylesheet", "script", "font", "media", "manifest", "ping"}
 
-# ✅ Suprime a janela preta do console em subprocessos no Windows
 _CREATE_NO_WINDOW: int = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+
+# ─── Caminhos dos navegadores homologados ────────────────────────────────────
+_CHROME_PATHS: list[str] = [
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    os.path.join(
+        os.environ.get("LOCALAPPDATA", ""),
+        r"Google\Chrome\Application\chrome.exe",
+    ),
+]
+
+_EDGE_PATHS: list[str] = [
+    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+]
 
 # ─── Paleta de cores ──────────────────────────────────────────────────────────
 C = {
@@ -76,34 +90,104 @@ C = {
     "subtext": "#6c757d",
     "dis_bg":  "#ced4da",
     "dis_fg":  "#868e96",
+    "warn_bg": "#fff3cd",
+    "warn_fg": "#856404",
 }
+
+
+def _detectar_canal_browser() -> tuple[str, str] | tuple[None, None]:
+    """
+    Detecta o navegador instalado disponível no sistema.
+    Prioridade: Google Chrome → Microsoft Edge.
+    Retorna (canal_playwright, nome_exibição) ou (None, None).
+    """
+    for path in _CHROME_PATHS:
+        if os.path.exists(path):
+            return "chrome", "Google Chrome"
+    for path in _EDGE_PATHS:
+        if os.path.exists(path):
+            return "msedge", "Microsoft Edge"
+    return None, None
+
+
+def _setup_ffmpeg_para_playwright() -> None:
+    """
+    Quando executado como .exe (PyInstaller), o Playwright não encontra o
+    ffmpeg no diretório _MEIPASS. Esta função resolve isso sem nenhum download:
+
+      1. Lê o browsers.json empacotado pelo PyInstaller para descobrir a
+         revisão exata de ffmpeg que a versão atual do Playwright espera.
+      2. Copia o binário do imageio-ffmpeg para _PW_BROWSERS_PATH com o
+         nome e estrutura de diretórios exatos que o Playwright exige.
+
+    Em desenvolvimento (VSCode) não executa nada — o Playwright usa o
+    cache normal do usuário em AppData/Local/ms-playwright.
+    """
+    if not getattr(sys, "frozen", False):
+        return  # Só age quando rodando como .exe
+
+    if not FFMPEG_EXE or not os.path.exists(FFMPEG_EXE):
+        return  # imageio-ffmpeg não disponível
+
+    base = getattr(sys, "_MEIPASS", "")
+    if not base:
+        return
+
+    # Possíveis localizações do browsers.json dentro do bundle PyInstaller
+    candidates = [
+        os.path.join(base, "playwright", "driver", "package", "browsers.json"),
+        os.path.join(base, "playwright", "driver", "browsers.json"),
+    ]
+    browsers_json = next((p for p in candidates if os.path.exists(p)), None)
+    if not browsers_json:
+        return
+
+    try:
+        with open(browsers_json, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return
+
+    # Descobre a revisão do ffmpeg que esta versão do Playwright espera
+    revision = None
+    for browser in data.get("browsers", []):
+        if browser.get("name") == "ffmpeg":
+            revision = browser.get("revision")
+            break
+
+    if not revision:
+        return
+
+    # Copia o binário do imageio-ffmpeg para o local esperado pelo Playwright
+    target_dir = os.path.join(_PW_BROWSERS_PATH, f"ffmpeg-{revision}")
+    target_exe = os.path.join(target_dir, "ffmpeg-win64.exe")
+
+    if not os.path.exists(target_exe):
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+            shutil.copy2(FFMPEG_EXE, target_exe)
+        except Exception:
+            pass  # Falha silenciosa — o vídeo não será gerado, mas o HAR sim
+
+
+# ✅ Configura o ffmpeg antes de qualquer chamada ao Playwright
+_setup_ffmpeg_para_playwright()
 
 
 class GravadorApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("SupTrace v1.0")
+        self.root.title("SupTrace v2.0")
         self.root.resizable(False, False)
         self.root.configure(bg=C["bg"])
 
-        WIN_W, WIN_H = 480, 380
+        WIN_W, WIN_H = 480, 350
         self.root.update_idletasks()
         self._screen_w: int = self.root.winfo_screenwidth()
         self._screen_h: int = self.root.winfo_screenheight()
         x = (self._screen_w - WIN_W) // 2
         y = (self._screen_h - WIN_H) // 2
         self.root.geometry(f"{WIN_W}x{WIN_H}+{x}+{y}")
-
-        # ✅ Estilo da barra de progresso do download
-        _style = ttk.Style()
-        _style.theme_use("default")
-        _style.configure(
-            "SupTrace.Horizontal.TProgressbar",
-            troughcolor=C["dis_bg"],
-            background=C["blue"],
-            borderwidth=0,
-            thickness=10,
-        )
 
         self._loop: asyncio.AbstractEventLoop | None = None
         self._playwright = None
@@ -118,6 +202,9 @@ class GravadorApp:
         self._har_path:  str = ""
         self._video_dir: str = ""
 
+        # ✅ Detecta o navegador disponível na inicialização
+        self._canal_browser, self._nome_browser = _detectar_canal_browser()
+
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         self._build_ui()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -127,7 +214,7 @@ class GravadorApp:
     def _build_ui(self):
 
         # ── Header ────────────────────────────────────────────────────────────
-        hdr = tk.Frame(self.root, bg=C["dark"], height=72)
+        hdr = tk.Frame(self.root, bg=C["dark"], height=78)
         hdr.pack(fill=tk.X)
         hdr.pack_propagate(False)
 
@@ -138,7 +225,20 @@ class GravadorApp:
             hdr_left, text="⏺  SupTrace",
             bg=C["dark"], fg=C["white"],
             font=("Segoe UI", 17, "bold"),
-        ).pack(anchor="w", pady=(14, 0))
+        ).pack(anchor="w", pady=(12, 2))
+
+        # ✅ Badge do navegador detectado
+        badge_color = C["green"] if self._canal_browser else C["red"]
+        badge_text  = (
+            f"🌐  Navegador: {self._nome_browser}"
+            if self._canal_browser
+            else "⚠️  Nenhum navegador homologado encontrado"
+        )
+        tk.Label(
+            hdr_left, text=badge_text,
+            bg=C["dark"], fg=badge_color,
+            font=("Segoe UI", 8, "bold"),
+        ).pack(anchor="w")
 
         # ── Body ──────────────────────────────────────────────────────────────
         body = tk.Frame(self.root, bg=C["bg"])
@@ -149,21 +249,38 @@ class GravadorApp:
             text="Grave a tela e as requisições de rede para diagnóstico do suporte.",
             bg=C["bg"], fg=C["subtext"],
             font=("Segoe UI", 9, "bold"), wraplength=420,
-        ).pack(pady=(16, 14))
+        ).pack(pady=(14, 10))
+
+        # ✅ Alerta visível quando nenhum navegador é encontrado
+        if not self._canal_browser:
+            alerta = tk.Frame(body, bg=C["warn_bg"], padx=12, pady=8)
+            alerta.pack(fill=tk.X, padx=24, pady=(0, 10))
+            tk.Label(
+                alerta,
+                text=(
+                    "O SupTrace requer o Google Chrome ou o Microsoft Edge instalado.\n"
+                    "Instale um dos navegadores e reinicie a aplicação."
+                ),
+                bg=C["warn_bg"], fg=C["warn_fg"],
+                font=("Segoe UI", 9), wraplength=400, justify=tk.LEFT,
+            ).pack(anchor="w")
 
         # Botão Iniciar
         self.btn_iniciar = tk.Button(
             body, text="⏺   Iniciar Gravação",
             command=self.iniciar_fluxo,
-            bg=C["green"], fg=C["white"],
+            bg=C["green"] if self._canal_browser else C["dis_bg"],
+            fg=C["white"]  if self._canal_browser else C["dis_fg"],
             font=("Segoe UI", 11, "bold"),
             relief=tk.FLAT, cursor="hand2",
             pady=10, width=28, bd=0,
+            state=tk.NORMAL if self._canal_browser else tk.DISABLED,
             activebackground=C["green_h"],
             activeforeground=C["white"],
         )
         self.btn_iniciar.pack(pady=(0, 8))
-        self._bind_hover(self.btn_iniciar, C["green"], C["green_h"])
+        if self._canal_browser:
+            self._bind_hover(self.btn_iniciar, C["green"], C["green_h"])
 
         # Botão Parar
         self.btn_parar = tk.Button(
@@ -180,39 +297,13 @@ class GravadorApp:
         self.btn_parar.pack(pady=(0, 12))
         self._bind_hover(self.btn_parar, C["red"], C["red_h"])
 
-        # ✅ Barra de progresso do Chromium (oculta por padrão)
-        # Não chamamos .pack() aqui — será exibida apenas durante o download
-        self._progress_frame = tk.Frame(body, bg=C["bg"])
-
-        prog_inner = tk.Frame(self._progress_frame, bg=C["bg"])
-        prog_inner.pack(fill=tk.X, padx=24)
-
-        self._progress_bar = ttk.Progressbar(
-            prog_inner,
-            style="SupTrace.Horizontal.TProgressbar",
-            orient=tk.HORIZONTAL,
-            mode="indeterminate",
-            length=100,
-        )
-        self._progress_bar.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        self._progress_lbl = tk.Label(
-            prog_inner,
-            text="  ...",
-            bg=C["bg"], fg=C["dark"],
-            font=("Segoe UI", 9, "bold"),
-            width=5, anchor="e",
-        )
-        self._progress_lbl.pack(side=tk.LEFT, padx=(8, 0))
-
         # ── Card de diretório ─────────────────────────────────────────────────
-        # Mantemos referência para posicionar a progress bar ANTES dele
-        self._dir_outer = tk.Frame(body, bg=C["white"])
-        self._dir_outer.pack(fill=tk.X, padx=24)
+        dir_outer = tk.Frame(body, bg=C["white"])
+        dir_outer.pack(fill=tk.X, padx=24)
 
-        tk.Frame(self._dir_outer, bg=C["dark"], width=5).pack(side=tk.LEFT, fill=tk.Y)
+        tk.Frame(dir_outer, bg=C["dark"], width=5).pack(side=tk.LEFT, fill=tk.Y)
 
-        dir_inner = tk.Frame(self._dir_outer, bg=C["white"])
+        dir_inner = tk.Frame(dir_outer, bg=C["white"])
         dir_inner.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10, pady=10)
 
         tk.Label(
@@ -259,8 +350,10 @@ class GravadorApp:
         self._dot = self._dot_cv.create_oval(1, 1, 9, 9, fill=C["gray"], outline="")
 
         self.lbl_status = tk.Label(
-            sbar_in, text="Pronto para iniciar",
-            bg=C["dark"], fg=C["gray"],
+            sbar_in,
+            text="Pronto para iniciar" if self._canal_browser else "Navegador não encontrado",
+            bg=C["dark"],
+            fg=C["gray"] if self._canal_browser else C["red"],
             font=("Segoe UI", 9),
         )
         self.lbl_status.pack(side=tk.LEFT)
@@ -292,169 +385,17 @@ class GravadorApp:
             self._dot_cv.itemconfig(self._dot, fill=clr)
         self.root.after(0, _upd)
 
-    # ─── Progresso do download ────────────────────────────────────────────────
-
-    def _show_progress(self) -> None:
-        """Exibe a barra pulsante (indeterminada) antes de receber o primeiro %."""
-        self._progress_bar.config(mode="indeterminate")
-        self._progress_bar["value"] = 0
-        self._progress_lbl.config(text="  ...")
-        self._progress_bar.start(12)
-        # Insere visualmente ANTES do card de diretório
-        self._progress_frame.pack(fill=tk.X, pady=(0, 10), before=self._dir_outer)
-
-    def _update_progress(self, pct: int) -> None:
-        """Muda para modo determinado e atualiza o percentual."""
-        self._progress_bar.stop()
-        self._progress_bar.config(mode="determinate")
-        self._progress_bar["value"] = pct
-        self._progress_lbl.config(text=f"{pct:>3}%")
-
-    def _hide_progress(self) -> None:
-        """Oculta a barra de progresso após o download."""
-        self._progress_bar.stop()
-        self._progress_frame.pack_forget()
-
-    # ─── Driver do Playwright ─────────────────────────────────────────────────
-
-    @staticmethod
-    def _get_driver_cmd() -> list[str]:
-        if getattr(sys, "frozen", False):
-            base       = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
-            driver_dir = os.path.join(base, "playwright", "driver")
-            node_exe   = os.path.join(driver_dir, "node.exe")
-            cli_js     = os.path.join(driver_dir, "package", "cli.js")
-
-            if os.path.exists(node_exe) and os.path.exists(cli_js):
-                return [node_exe, cli_js]
-
-            pw_cmd = os.path.join(driver_dir, "playwright.cmd")
-            if os.path.exists(pw_cmd):
-                return ["cmd.exe", "/c", pw_cmd]
-
-            raise FileNotFoundError(
-                f"Playwright driver não encontrado em:\n{driver_dir}\n\n"
-                "Recompile com:  --collect-all playwright"
-            )
-        else:
-            from playwright._impl._driver import compute_driver_executable
-            driver = str(compute_driver_executable())
-            if sys.platform == "win32" and driver.lower().endswith(".cmd"):
-                return ["cmd.exe", "/c", driver]
-            return [driver]
-
-    # ─── Verificar / instalar Chromium ───────────────────────────────────────
-
-    def _verificar_chromium(self) -> bool:
-        """
-        Verifica se o Chromium está instalado.
-        Se não estiver, faz o download exibindo progresso em tempo real na UI.
-
-        • Janela preta suprimida via CREATE_NO_WINDOW.
-        • Playwright emite progresso com \\r (mesma linha); lemos em chunks
-          binários, dividimos por [\\r\\n] e extraímos o % com regex.
-        """
-        browsers_path = os.environ["PLAYWRIGHT_BROWSERS_PATH"]
-
-        chromium_ok = (
-            os.path.isdir(browsers_path)
-            and any(e.startswith("chromium") for e in os.listdir(browsers_path))
-        )
-
-        if chromium_ok:
-            return True
-
-        # ── Primeira execução: precisa baixar o Chromium ──────────────────────
-        self._set_status("Baixando Chromium... (pode levar alguns minutos)", "orange")
-        self.root.after(0, self._show_progress)
-
-        try:
-            driver_cmd     = self._get_driver_cmd()
-            creation_flags = _CREATE_NO_WINDOW if sys.platform == "win32" else 0
-
-            # ✅ Popen em modo binário — lemos a saída em tempo real
-            proc = subprocess.Popen(
-                [*driver_cmd, "install", "chromium"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,   # unifica stderr → stdout
-                env=os.environ.copy(),
-                creationflags=creation_flags,
-            )
-
-            buf = b""
-            while True:
-                chunk = proc.stdout.read(128)   # bloqueante, sem spin-lock
-                if not chunk:
-                    break
-                buf += chunk
-
-                # ✅ Divide nos separadores \r e \n para capturar cada update
-                segments = re.split(b"[\r\n]", buf)
-                buf = segments[-1]              # fragmento incompleto — guarda
-                for seg in segments[:-1]:
-                    line = seg.decode("utf-8", errors="replace").strip()
-                    m    = re.search(r"(\d+)\s*%", line)
-                    if m:
-                        pct = min(int(m.group(1)), 100)
-                        self.root.after(0, lambda p=pct: self._update_progress(p))
-
-            # Processa o que restar no buffer
-            if buf.strip():
-                line = buf.decode("utf-8", errors="replace").strip()
-                m    = re.search(r"(\d+)\s*%", line)
-                if m:
-                    pct = min(int(m.group(1)), 100)
-                    self.root.after(0, lambda p=pct: self._update_progress(p))
-
-            try:
-                proc.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-
-            self.root.after(0, self._hide_progress)
-
-            if proc.returncode not in (0, None):
-                raise subprocess.CalledProcessError(proc.returncode, driver_cmd)
-
-            self._set_status("Chromium instalado! Abrindo navegador...", "blue")
-            return True
-
-        except FileNotFoundError as exc:
-            self.root.after(0, self._hide_progress)
-            self.root.after(0, lambda e=exc: messagebox.showerror(
-                "Erro de configuração",
-                "O driver do Playwright não foi encontrado no executável.\n\n"
-                "Recompile o app com:\n\n"
-                "  pyinstaller --onefile --windowed --uac-admin --name SupTrace \\\n"
-                "    --collect-all playwright --collect-all imageio_ffmpeg suptrace.py\n\n"
-                f"Detalhe:\n{e}",
-            ))
-            self._set_status("Erro de configuração do driver.", "red")
-            return False
-
-        except subprocess.CalledProcessError as exc:
-            self.root.after(0, self._hide_progress)
-            self.root.after(0, lambda e=exc: messagebox.showerror(
-                "Falha no download do Chromium",
-                "Não foi possível baixar o Chromium.\n\n"
-                "Verifique sua conexão com a internet e tente novamente.\n\n"
-                f"Código de saída: {e.returncode}",
-            ))
-            self._set_status("Falha ao baixar Chromium.", "red")
-            return False
-
-        except Exception as exc:
-            self.root.after(0, self._hide_progress)
-            self.root.after(0, lambda e=exc: messagebox.showerror(
-                "Chromium não instalado",
-                f"Erro inesperado ao instalar o Chromium:\n\n{e}",
-            ))
-            self._set_status("Chromium não instalado.", "red")
-            return False
-
     # ─── Iniciar ─────────────────────────────────────────────────────────────
 
     def iniciar_fluxo(self):
+        if not self._canal_browser:
+            messagebox.showerror(
+                "Navegador não encontrado",
+                "O SupTrace requer o Google Chrome ou o Microsoft Edge instalado.\n\n"
+                "Instale um dos navegadores e reinicie a aplicação.",
+            )
+            return
+
         self._tmp_dir   = tempfile.mkdtemp(prefix="gravador_suporte_")
         self._har_path  = os.path.join(self._tmp_dir, "rede.har")
         self._video_dir = os.path.join(self._tmp_dir, "video")
@@ -465,25 +406,22 @@ class GravadorApp:
         self._salvando = False
 
         self._btn_disable(self.btn_iniciar)
-        self._set_status("Verificando Chromium...", "blue")
+        self._set_status(f"Abrindo {self._nome_browser}...", "blue")
 
         self._loop = asyncio.new_event_loop()
         threading.Thread(target=self._run_loop, daemon=True).start()
 
     def _run_loop(self):
         asyncio.set_event_loop(self._loop)
-
-        if not self._verificar_chromium():
-            self._gravando = False
-            self.root.after(0, lambda: self._btn_enable(self.btn_iniciar, C["green"]))
-            self._loop.close()
-            return
-
         try:
             self._loop.run_until_complete(self._abrir_navegador())
         except Exception as exc:
             self.root.after(
-                0, lambda e=exc: messagebox.showerror("Erro", f"Falha ao iniciar o navegador:\n{e}")
+                0, lambda e=exc: messagebox.showerror(
+                    "Erro",
+                    f"Falha ao iniciar o {self._nome_browser}:\n\n{e}\n\n"
+                    "Verifique se o navegador está instalado corretamente.",
+                )
             )
             self._set_status("Erro ao abrir o navegador.", "red")
             self.root.after(0, lambda: self._btn_enable(self.btn_iniciar, C["green"]))
@@ -494,7 +432,10 @@ class GravadorApp:
     async def _abrir_navegador(self):
         self._playwright = await async_playwright().start()
 
+        # ✅ Usa o navegador instalado no sistema (Chrome ou Edge)
+        # Canal detectado em _detectar_canal_browser() — sem download, sem Chromium externo
         self._browser = await self._playwright.chromium.launch(
+            channel=self._canal_browser,
             headless=False,
             args=["--incognito", "--start-maximized"],
         )
