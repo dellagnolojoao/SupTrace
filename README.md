@@ -13,7 +13,7 @@ O objetivo é eliminar a necessidade de solicitar prints, acesso remoto ou orien
 
 ---
 
-## 🆕 Novidades da v2.0
+## Novidades da v2.0
 
 | # | Mudança |
 |---|---|
@@ -149,21 +149,3 @@ Nenhum dado é enviado a servidores externos pela ferramenta.
 ## Contribuindo
 
 Sugestões, dúvidas e contribuições sobre o código são bem-vindas — abra uma [*issue*](../../issues) ou um [*pull request*](../../pulls).
-```
-
----
-
-## O que foi atualizado e por quê
-
-| Seção | O que mudou |
-|---|---|
-| **Cabeçalho** | Mantido, mas sem referência ao Chromium |
-| **🆕 Novidades v2.0** | Seção nova — essencial para quem já conhecia a v1.0 entender o que mudou |
-| **Como funciona** | Removida menção ao Chromium; substituída por "navegador detectado (Chrome ou Edge)" |
-| **Requisitos** | Substituído "Chromium via download" por "Chrome ou Edge instalado"; adicionado aviso de exclusividade Windows |
-| **Instalação** | Removida nota sobre download do Chromium na primeira execução |
-| **Gerando o .exe** | Adicionada tabela explicando cada flag; adicionada nota técnica sobre o comportamento do ffmpeg no `.exe` |
-| **Saída gerada** | Detalhou o conteúdo do relatório HTML para valorizar a ferramenta |
-| **Privacidade** | Adicionado aviso de conteúdo sensível no relatório |
-| **Releases** | Tabela de versões com links diretos — facilita navegação entre releases |
-| **Contribuindo** | Links diretos para issues e PRs do repositório |
