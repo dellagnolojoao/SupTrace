@@ -1,4 +1,6 @@
-# Python
+# ─── SupTrace v2.0 — .gitignore ──────────────────────────────────────────────
+
+# ─── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
@@ -9,26 +11,36 @@ __pycache__/
 venv/
 env/
 
-# PyInstaller
+# ─── PyInstaller ─────────────────────────────────────────────────────────────
 build/
 dist/
 *.spec
 
-# Playwright browsers (baixados em runtime, não versionar)
+# ─── Playwright ──────────────────────────────────────────────────────────────
+# v1.0: Chromium era baixado no projeto → ignorado
+# v1.1: Chrome/Edge do sistema são usados → sem download no projeto
+# Mantidos por segurança caso algum ambiente de dev gere localmente
 .playwright-browsers/
 ms-playwright/
+pw-browsers/
 
-# Artefatos gerados pela ferramenta em tempo de execução
+# ─── Artefatos gerados em runtime pela ferramenta ────────────────────────────
 *.har
 *.webm
 *.zip
-C:/Temp/
+*.log
 
-# Sistema
+# ─── Sistema operacional ─────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# IDEs
+# ─── IDEs ────────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.iml
+
+# ─── Variáveis de ambiente e configurações locais ────────────────────────────
+.env
+.env.*
+*.local
