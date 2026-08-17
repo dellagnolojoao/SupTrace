@@ -141,8 +141,8 @@ Nenhum dado é enviado a servidores externos pela ferramenta.
 
 | Versão | Data | Destaques |
 |---|---|---|
-| [v2.0](../../releases/tag/v2.0) | 2026-08-17 | Chrome/Edge homologado, detecção automática de navegador, fix ffmpeg no `.exe` |
-| [v1.0](../../releases/tag/v1.0) | — | Versão inicial com Chromium via download automático |
+| [v1.1]([../../releases/tag/v2.0](https://github.com/dellagnolojoao/SupTrace/releases/tag/SupTrace_v1.1)) | 2026-08-17 | Chrome/Edge homologado, detecção automática de navegador, fix ffmpeg no `.exe` |
+| [v1.0]([../../releases/tag/v1.0](https://github.com/dellagnolojoao/SupTrace/releases/tag/SupTrace_v1.0)) | — | Versão inicial com Chromium via download automático |
 
 ---
 
