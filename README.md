@@ -13,7 +13,7 @@ O objetivo é eliminar a necessidade de solicitar prints, acesso remoto ou orien
 
 ---
 
-## Novidades da v2.0
+## Novidades da v1.1
 
 | # | Mudança |
 |---|---|
