@@ -13,7 +13,7 @@ O objetivo é eliminar a necessidade de solicitar prints, acesso remoto ou orien
 
 ---
 
-## Novidades da v1.3
+## Novidades da v1.2
 
 | # | Mudança |
 |---|---|
@@ -171,8 +171,7 @@ Nenhum dado é enviado a servidores externos pela ferramenta.
 
 | Versão | Data | Destaques |
 |---|---|---|
-| [v1.3](https://github.com/dellagnolojoao/SupTrace/releases/tag/SupTrace_v1.3) | 2026-08-18 | FFmpeg fast path (`-itsscale` + `-c:v copy`): processamento ~23 s → < 3 s |
-| [v1.2](https://github.com/dellagnolojoao/SupTrace/releases/tag/SupTrace_v1.2) | 2026-08-18 | Janela de processamento, bloqueio de fechamento, fix TEMP/UAC, processamento paralelo |
+| [v1.2](https://github.com/dellagnolojoao/SupTrace/releases/tag/SupTrace_v1.2) | 2026-08-18 | FFmpeg fast path (`-itsscale` + `-c:v copy`): processamento ~23 s → < 3 s | Janela de processamento, bloqueio de fechamento, fix TEMP/UAC, processamento paralelo |
 | [v1.1](https://github.com/dellagnolojoao/SupTrace/releases/tag/SupTrace_v1.1) | 2026-08-17 | Chrome/Edge homologado, detecção automática de navegador, fix ffmpeg no `.exe` |
 | [v1.0](https://github.com/dellagnolojoao/SupTrace/releases/tag/SupTrace_v1.0) | — | Versão inicial com Chromium via download automático |
 
