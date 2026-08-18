@@ -1,4 +1,4 @@
-# ─── SupTrace v2.0 — .gitignore ──────────────────────────────────────────────
+# ─── SupTrace v1.3 — .gitignore ──────────────────────────────────────────────
 
 # ─── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
@@ -18,7 +18,7 @@ dist/
 
 # ─── Playwright ──────────────────────────────────────────────────────────────
 # v1.0: Chromium era baixado no projeto → ignorado
-# v1.1: Chrome/Edge do sistema são usados → sem download no projeto
+# v1.1+: Chrome/Edge do sistema são usados → sem download no projeto
 # Mantidos por segurança caso algum ambiente de dev gere localmente
 .playwright-browsers/
 ms-playwright/
