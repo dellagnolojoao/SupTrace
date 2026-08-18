@@ -1,4 +1,4 @@
-# ─── SupTrace v1.1 — Dependências ────────────────────────────────────────────
+# ─── SupTrace v1.3 — Dependências ────────────────────────────────────────────
 # Instale com: pip install -r requirements.txt
 # Testado com Python 3.10+, Windows 10/11
 
@@ -7,7 +7,8 @@
 playwright>=1.44.0
 
 # Binário portátil do ffmpeg — usado para:
-#   1. Acelerar e normalizar o vídeo gravado (1.5×)
+#   1. Acelerar o vídeo gravado (1.5×) via manipulação de timestamps
+#      (fast path: -itsscale + -c:v copy — zero decode/encode)
 #   2. Ser copiado automaticamente ao diretório do Playwright na execução do .exe
 imageio-ffmpeg>=0.5.1
 
