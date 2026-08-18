@@ -13,6 +13,32 @@ O objetivo é eliminar a necessidade de solicitar prints, acesso remoto ou orien
 
 ---
 
+## Novidades da v1.3
+
+| # | Mudança |
+|---|---|
+| ✅ | **Fast path FFmpeg**: aceleração de vídeo via `-itsscale` + `-c:v copy` — nenhum frame é decodificado ou reencodado |
+| ✅ | **Tempo de processamento drasticamente reduzido**: ~23 s → **< 3 s** no caso comum (sem reescala de resolução) |
+| ✅ | **Análise de container otimizada**: `-probesize` e `-analyzeduration` reduzidos (5 MB / 5 s → 500 KB / 0,1 s) |
+| ✅ | **Slow path mais rápido**: quando reescala é necessária, usa VP8 `realtime` + `cpu-used 8` em vez do preset padrão |
+| ✅ | **Early return**: sem processamento algum quando velocidade = 1,0× e resolução já está no alvo |
+
+---
+
+## Novidades da v1.2
+
+| # | Mudança |
+|---|---|
+| ✅ | **Janela de processamento dedicada** com barra de progresso e aviso em vermelho — impossível não perceber que o app está trabalhando |
+| ✅ | **Bloqueio de fechamento durante o processamento** — fechar a janela enquanto o pacote é gerado exibe aviso e impede a perda dos arquivos |
+| ✅ | **Pasta temporária fixa** em `%LOCALAPPDATA%\SupTrace\tmp` — evita erros de permissão causados pelo UAC resolvendo `%TEMP%` para caminhos incorretos |
+| ✅ | **Processamento paralelo**: vídeo e relatório HTML gerados simultaneamente (antes era sequencial) |
+| ✅ | **ZIP sem recompressão do `.webm`** — formato já comprimido; recomprimir só desperdiçava CPU |
+| ✅ | **Limpeza automática de temporários órfãos** na inicialização — evita acúmulo de lixo de execuções anteriores interrompidas |
+| ✅ | **Remoção de diretórios com tentativas repetidas** (`_safe_rmtree`) — tolerância a arquivos temporariamente travados por antivírus ou pelo próprio ffmpeg |
+
+---
+
 ## Novidades da v1.1
 
 | # | Mudança |
@@ -33,9 +59,13 @@ O objetivo é eliminar a necessidade de solicitar prints, acesso remoto ou orien
 3. O usuário reproduz o problema normalmente nesse navegador.
 4. Ao clicar em **"Salvar e Fechar"**, a ferramenta:
    - encerra o navegador e finaliza a captura;
-   - acelera e normaliza o vídeo (via `ffmpeg`, através do `imageio-ffmpeg`);
-   - converte o `.har` em um relatório HTML navegável, com abas por requisição (headers, query params, payload, response headers e body);
+   - exibe uma **janela de processamento** com barra de progresso enquanto trabalha;
+   - acelera o vídeo via manipulação de timestamps (sem decode/encode — operação de I/O puro);
+   - converte o `.har` em um relatório HTML navegável, com abas por requisição (headers, query params, payload, response headers e body) — em paralelo ao vídeo;
    - compacta vídeo + relatório em um único `.zip` nomeado com data/hora, salvo em `C:\Temp`.
+5. A janela de processamento desaparece e uma notificação confirma o arquivo gerado.
+
+> ⚠️ **Não feche o aplicativo enquanto a janela de processamento estiver visível** — os arquivos serão perdidos. O próprio app impede o fechamento acidental e exibe um aviso caso você tente.
 
 ---
 
@@ -141,6 +171,8 @@ Nenhum dado é enviado a servidores externos pela ferramenta.
 
 | Versão | Data | Destaques |
 |---|---|---|
+| [v1.3](https://github.com/dellagnolojoao/SupTrace/releases/tag/SupTrace_v1.3) | 2026-08-18 | FFmpeg fast path (`-itsscale` + `-c:v copy`): processamento ~23 s → < 3 s |
+| [v1.2](https://github.com/dellagnolojoao/SupTrace/releases/tag/SupTrace_v1.2) | 2026-08-18 | Janela de processamento, bloqueio de fechamento, fix TEMP/UAC, processamento paralelo |
 | [v1.1](https://github.com/dellagnolojoao/SupTrace/releases/tag/SupTrace_v1.1) | 2026-08-17 | Chrome/Edge homologado, detecção automática de navegador, fix ffmpeg no `.exe` |
 | [v1.0](https://github.com/dellagnolojoao/SupTrace/releases/tag/SupTrace_v1.0) | — | Versão inicial com Chromium via download automático |
 
