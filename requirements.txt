@@ -1,4 +1,4 @@
-# ─── SupTrace v1.3 — Dependências ────────────────────────────────────────────
+# ─── SupTrace v1.2 — Dependências ────────────────────────────────────────────
 # Instale com: pip install -r requirements.txt
 # Testado com Python 3.10+, Windows 10/11
 
