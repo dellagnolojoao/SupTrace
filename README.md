@@ -1,4 +1,3 @@
-```markdown
 # SupTrace
 
 > Ferramenta interna para otimizar a análise de falhas no suporte e o reporte de erros para a equipe de P&D.
@@ -7,14 +6,12 @@ O SupTrace permite que o usuário reproduza um problema em um navegador controla
 
 Ao final, é gerado um único arquivo `.zip` contendo:
 
-- 🎥 Gravação do teste em vídeo `.webm`;
-- 📡 Captura das chamadas de rede;
-- 📋 Relatório HTML interativo das requisições realizadas;
-- 📦 Pacote compactado pronto para ser enviado à equipe técnica.
+- Gravação do teste em vídeo `.webm`;
+- Captura das chamadas de rede;
+- Relatório HTML interativo das requisições realizadas;
+- Pacote compactado pronto para ser enviado à equipe técnica.
 
 O objetivo é reduzir a necessidade de solicitar prints, acesso remoto ou instruções para abertura das ferramentas de desenvolvedor do navegador.
-
----
 
 ## Principais recursos
 
@@ -27,8 +24,6 @@ O objetivo é reduzir a necessidade de solicitar prints, acesso remoto ou instru
 - Processamento paralelo do vídeo e do relatório;
 - Geração automática de um arquivo `.zip`;
 - Execução totalmente local, sem envio automático de dados para servidores externos.
-
----
 
 ## Como funciona
 
@@ -47,8 +42,6 @@ O objetivo é reduzir a necessidade de solicitar prints, acesso remoto ou instru
 
 > ⚠️ Não feche o aplicativo enquanto a janela de processamento estiver visível. O SupTrace bloqueia o fechamento durante essa etapa para evitar a perda dos arquivos.
 
----
-
 ## Requisitos
 
 - Windows 10 ou superior;
@@ -57,8 +50,6 @@ O objetivo é reduzir a necessidade de solicitar prints, acesso remoto ou instru
 - Dependências listadas em [`requirements.txt`](./requirements.txt).
 
 > O SupTrace é exclusivo para Windows, pois utiliza recursos nativos do sistema para elevação de privilégio via UAC e abertura de pastas.
-
----
 
 ## Instalação e execução
 
@@ -89,8 +80,6 @@ python suptrace.py
 ```
 
 > O aplicativo pode solicitar elevação de privilégio via UAC ao iniciar. Essa elevação é necessária para evitar problemas de permissão relacionados à gravação e à criação dos arquivos temporários.
-
----
 
 ## Geração do executável
 
@@ -125,8 +114,6 @@ Na primeira execução, o SupTrace copia automaticamente o binário do `imageio-
 
 Nas execuções seguintes, o binário já estará disponível em cache.
 
----
-
 ## Arquivos gerados
 
 Os pacotes são salvos no diretório:
@@ -160,8 +147,6 @@ O relatório apresenta informações detalhadas sobre cada requisição capturad
 
 As requisições podem ser filtradas diretamente no navegador.
 
----
-
 ## Privacidade e segurança
 
 O SupTrace executa o processamento localmente na máquina do usuário:
@@ -175,8 +160,6 @@ A aplicação não envia automaticamente dados para servidores externos.
 
 > ⚠️ O material gerado pode conter informações sensíveis, como tokens de autenticação, cookies, payloads, dados de clientes e informações exibidas na tela. Revise os arquivos antes de compartilhá-los.
 
----
-
 ## Histórico de versões
 
 O histórico detalhado de alterações está disponível no arquivo [`CHANGELOG.md`](./CHANGELOG.md).
@@ -186,8 +169,6 @@ As versões publicadas, seus arquivos e respectivos detalhes também podem ser c
 ### Versão atual
 
 - [v1.2](https://github.com/dellagnolojoao/SupTrace/releases/tag/SupTrace_v1.2)
-
----
 
 ## Estrutura do projeto
 
