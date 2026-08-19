@@ -9,7 +9,6 @@ Todas as alterações relevantes do SupTrace estão documentadas neste arquivo.
 - Janela de processamento dedicada com barra de progresso.
 - Processamento paralelo do vídeo e do relatório HTML.
 - Limpeza automática de arquivos temporários órfãos.
-- Detecção e utilização automática do Chrome ou Edge.
 
 ### Melhorado
 
