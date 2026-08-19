@@ -14,7 +14,7 @@ Todas as alterações relevantes do SupTrace estão documentadas neste arquivo.
 ### Melhorado
 
 - Processamento rápido do vídeo utilizando `-itsscale` e `-c:v copy`.
-- Redução do tempo de processamento de aproximadamente 23 segundos para menos de 3 segundos no cenário comum.
+- Redução do tempo de processamento.
 - Maior tolerância à remoção de arquivos temporariamente bloqueados.
 
 ### Corrigido
