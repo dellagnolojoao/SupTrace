@@ -34,6 +34,6 @@ Todas as alterações relevantes do SupTrace estão documentadas neste arquivo.
 
 - Download automático do Chromium.
 
-## [1.0.0] - 2026-08-15
+## [1.0] - 2026-08-15
 
 - Versão inicial do SupTrace.
