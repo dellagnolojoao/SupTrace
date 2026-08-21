@@ -17,9 +17,6 @@ if not _is_admin():
     _elevar()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ✅ PLAYWRIGHT_BROWSERS_PATH – definido antes de qualquer import do playwright.
-#    Aponta para um diretório persistente e gravável onde o ffmpeg será
-#    copiado do imageio-ffmpeg na primeira execução do .exe.
 import os
 
 _PW_BROWSERS_PATH = os.path.join(
@@ -29,13 +26,6 @@ _PW_BROWSERS_PATH = os.path.join(
 os.makedirs(_PW_BROWSERS_PATH, exist_ok=True)
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = _PW_BROWSERS_PATH
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ✅ TEMP/TMP fixos em uma pasta própria e sempre gravável.
-#    Quando o app roda elevado (UAC/"runas"), o Windows às vezes resolve
-#    %TEMP% para um perfil incorreto (ex.: "...\Application Data"), que pode
-#    não ter permissão de escrita. Isso causava falha ao apagar arquivos
-#    temporários e, em seguida, falha nas gravações seguintes. Fixamos aqui
-#    ANTES de qualquer uso de tempfile, para garantir um caminho previsível.
 _APP_TMP_ROOT = os.path.join(
     os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
     "SupTrace", "tmp",
@@ -76,25 +66,18 @@ HAR_SKIP_TYPES = {"image", "stylesheet", "script", "font", "media", "manifest", 
 
 _CREATE_NO_WINDOW: int = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 
-# ─── Preset de re-encode rápido (usado SOMENTE quando há reescala de resolução)
-# ✅ VP8 "realtime" é drasticamente mais rápido que o default do FFmpeg,
-#    a um custo de qualidade irrelevante para fins de suporte técnico.
 _LIBVPX_FAST_ARGS = [
     "-c:v", "libvpx",
-    "-deadline", "realtime",   # preset máximo de velocidade do VP8
-    "-cpu-used", "8",          # 0 = melhor qualidade; 8 = máxima velocidade
+    "-deadline", "realtime",
+    "-cpu-used", "8",
     "-crf", "18",
     "-b:v", "0",
 ]
 
-# ─── Caminhos dos navegadores homologados ─────────────────────────────────────
 _CHROME_PATHS: list[str] = [
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-    os.path.join(
-        os.environ.get("LOCALAPPDATA", ""),
-        r"Google\Chrome\Application\chrome.exe",
-    ),
+    os.path.join(os.environ.get("LOCALAPPDATA", ""), r"Google\Chrome\Application\chrome.exe"),
 ]
 
 _EDGE_PATHS: list[str] = [
@@ -102,7 +85,6 @@ _EDGE_PATHS: list[str] = [
     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
 ]
 
-# ─── Paleta de cores ──────────────────────────────────────────────────────────
 C = {
     "dark":    "#1a1a2e",
     "bg":      "#f5f6fa",
@@ -121,14 +103,9 @@ C = {
     "warn_fg": "#856404",
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+
 def _safe_rmtree(path: str, tentativas: int = 5, espera: float = 0.6) -> bool:
-    """
-    Remove um diretório com tentativas repetidas. No Windows é comum um
-    processo (ffmpeg, antivírus) segurar o arquivo por uma fração de
-    segundo a mais – isso fazia a limpeza falhar e "empacar" pastas
-    temporárias, causando os erros relatados. Aqui insistimos por alguns
-    segundos antes de desistir.
-    """
     if not path or not os.path.isdir(path):
         return True
     for tentativa in range(tentativas):
@@ -140,13 +117,8 @@ def _safe_rmtree(path: str, tentativas: int = 5, espera: float = 0.6) -> bool:
                 time.sleep(espera)
     return False
 
+
 def _limpar_temporarios_orfaos() -> None:
-    """
-    Remove, na inicialização, pastas temporárias de execuções anteriores
-    que não puderam ser apagadas (ex.: app fechado à força, arquivo
-    travado). Evita acúmulo de lixo em disco e problemas futuros de
-    permissão/espaço. Falhas aqui são silenciosas – não é crítico.
-    """
     try:
         for nome in os.listdir(_APP_TMP_ROOT):
             if nome.startswith("gravador_suporte_"):
@@ -154,12 +126,8 @@ def _limpar_temporarios_orfaos() -> None:
     except Exception:
         pass
 
+
 def _detectar_canal_browser() -> tuple[str, str] | tuple[None, None]:
-    """
-    Detecta o navegador instalado disponível no sistema.
-    Prioridade: Google Chrome → Microsoft Edge.
-    Retorna (canal_playwright, nome_exibição) ou (None, None).
-    """
     for path in _CHROME_PATHS:
         if os.path.exists(path):
             return "chrome", "Google Chrome"
@@ -168,30 +136,27 @@ def _detectar_canal_browser() -> tuple[str, str] | tuple[None, None]:
             return "msedge", "Microsoft Edge"
     return None, None
 
+
+def _fmt_size(size_bytes: int) -> str:
+    """Tamanho legível para humanos."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 ** 2:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 ** 3:
+        return f"{size_bytes / 1024 ** 2:.1f} MB"
+    else:
+        return f"{size_bytes / 1024 ** 3:.2f} GB"
+
+
 def _setup_ffmpeg_para_playwright() -> None:
-    """
-    Quando executado como .exe (PyInstaller), o Playwright não encontra o
-    ffmpeg no diretório _MEIPASS. Esta função resolve isso sem nenhum download:
-
-      1. Lê o browsers.json empacotado pelo PyInstaller para descobrir a
-         revisão exata de ffmpeg que a versão atual do Playwright espera.
-      2. Copia o binário do imageio-ffmpeg para _PW_BROWSERS_PATH com o
-         nome e estrutura de diretórios exatos que o Playwright exige.
-
-    Em desenvolvimento (VSCode) não executa nada – o Playwright usa o
-    cache normal do usuário em AppData/Local/ms-playwright.
-    """
     if not getattr(sys, "frozen", False):
-        return  # Só age quando rodando como .exe
-
+        return
     if not FFMPEG_EXE or not os.path.exists(FFMPEG_EXE):
-        return  # imageio-ffmpeg não disponível
-
+        return
     base = getattr(sys, "_MEIPASS", "")
     if not base:
         return
-
-    # Possíveis localizações do browsers.json dentro do bundle PyInstaller
     candidates = [
         os.path.join(base, "playwright", "driver", "package", "browsers.json"),
         os.path.join(base, "playwright", "driver", "browsers.json"),
@@ -199,45 +164,41 @@ def _setup_ffmpeg_para_playwright() -> None:
     browsers_json = next((p for p in candidates if os.path.exists(p)), None)
     if not browsers_json:
         return
-
     try:
         with open(browsers_json, "r", encoding="utf-8") as f:
             data = json.load(f)
     except Exception:
         return
-
-    # Descobre a revisão do ffmpeg que esta versão do Playwright espera
     revision = None
     for browser in data.get("browsers", []):
         if browser.get("name") == "ffmpeg":
             revision = browser.get("revision")
             break
-
     if not revision:
         return
-
-    # Copia o binário do imageio-ffmpeg para o local esperado pelo Playwright
     target_dir = os.path.join(_PW_BROWSERS_PATH, f"ffmpeg-{revision}")
     target_exe = os.path.join(target_dir, "ffmpeg-win64.exe")
-
     if not os.path.exists(target_exe):
         try:
             os.makedirs(target_dir, exist_ok=True)
             shutil.copy2(FFMPEG_EXE, target_exe)
         except Exception:
-            pass  # Falha silenciosa – o vídeo não será gerado, mas o HAR sim
+            pass
 
-# ✅ Configura o ffmpeg antes de qualquer chamada ao Playwright
+
 _setup_ffmpeg_para_playwright()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 class GravadorApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("SupTrace v1.2")
+        self.root.title("SupTrace v1.3")
         self.root.resizable(False, False)
         self.root.configure(bg=C["bg"])
 
-        WIN_W, WIN_H = 480, 350
+        WIN_W, WIN_H = 480, 400
         self.root.update_idletasks()
         self._screen_w: int = self.root.winfo_screenwidth()
         self._screen_h: int = self.root.winfo_screenheight()
@@ -245,22 +206,38 @@ class GravadorApp:
         y = (self._screen_h - WIN_H) // 2
         self.root.geometry(f"{WIN_W}x{WIN_H}+{x}+{y}")
 
+        # ── Playwright state
         self._loop: asyncio.AbstractEventLoop | None = None
         self._playwright = None
         self._browser    = None
         self._context    = None
         self._page       = None
+        # ✅ Multi-tab: lista de todas as pages rastreadas
+        self._pages: list = []
         self._gravando: bool = False
         self._salvando: bool = False
         self._stop_event = threading.Event()
 
+        # ── File paths
         self._tmp_dir:   str = ""
         self._har_path:  str = ""
         self._video_dir: str = ""
+
+        # ── Processing window refs
         self._proc_win: tk.Toplevel | None = None
         self._proc_lbl: tk.Label | None = None
+        self._progress_var: tk.IntVar | None = None
+        self._progress_pct_lbl: tk.Label | None = None
+        self._proc_step_lbl: tk.Label | None = None
 
-        # ✅ Detecta o navegador disponível na inicialização
+        # ── Timer / blink
+        self._recording_start: datetime | None = None
+        self._timer_id: str | None = None
+        self._blink_state: bool = True
+
+        # ── Dynamic UI refs
+        self._tab_count_lbl: tk.Label | None = None
+
         self._canal_browser, self._nome_browser = _detectar_canal_browser()
 
         os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -286,7 +263,6 @@ class GravadorApp:
             font=("Segoe UI", 17, "bold"),
         ).pack(anchor="w", pady=(12, 2))
 
-        # ✅ Badge do navegador detectado
         badge_color = C["green"] if self._canal_browser else C["red"]
         badge_text  = (
             f"🌐  Navegador: {self._nome_browser}"
@@ -299,6 +275,13 @@ class GravadorApp:
             font=("Segoe UI", 8, "bold"),
         ).pack(anchor="w")
 
+        # Versão alinhada à direita no header
+        tk.Label(
+            hdr, text="v1.3",
+            bg=C["dark"], fg=C["gray"],
+            font=("Segoe UI", 8),
+        ).pack(side=tk.RIGHT, padx=16, pady=8, anchor="ne")
+
         # ── Body ──────────────────────────────────────────────────────────────
         body = tk.Frame(self.root, bg=C["bg"])
         body.pack(fill=tk.BOTH, expand=True)
@@ -308,12 +291,20 @@ class GravadorApp:
             text="Grave a tela e as requisições de rede para diagnóstico do suporte.",
             bg=C["bg"], fg=C["subtext"],
             font=("Segoe UI", 9, "bold"), wraplength=420,
-        ).pack(pady=(14, 10))
+        ).pack(pady=(14, 4))
 
-        # ✅ Alerta visível quando nenhum navegador é encontrado
+        # ✅ Contador de abas (oculto em repouso, atualizado durante gravação)
+        self._tab_count_lbl = tk.Label(
+            body, text="",
+            bg=C["bg"], fg=C["blue"],
+            font=("Segoe UI", 9),
+        )
+        self._tab_count_lbl.pack(pady=(0, 4))
+
+        # Alerta de navegador ausente
         if not self._canal_browser:
             alerta = tk.Frame(body, bg=C["warn_bg"], padx=12, pady=8)
-            alerta.pack(fill=tk.X, padx=24, pady=(0, 10))
+            alerta.pack(fill=tk.X, padx=24, pady=(0, 8))
             tk.Label(
                 alerta,
                 text=(
@@ -353,13 +344,21 @@ class GravadorApp:
             activebackground=C["red_h"],
             activeforeground=C["white"],
         )
-        self.btn_parar.pack(pady=(0, 12))
+        self.btn_parar.pack(pady=(0, 6))
         self._bind_hover(self.btn_parar, C["red"], C["red_h"])
+
+        # ✅ Dica de atalho de teclado
+        tk.Label(
+            body,
+            text="Dica: pressione  Esc  para encerrar a gravação",
+            bg=C["bg"], fg=C["gray"],
+            font=("Segoe UI", 8),
+        ).pack(pady=(0, 10))
+        self.root.bind("<Escape>", lambda _: self.parar_fluxo())
 
         # ── Card de diretório ─────────────────────────────────────────────────
         dir_outer = tk.Frame(body, bg=C["white"])
         dir_outer.pack(fill=tk.X, padx=24)
-
         tk.Frame(dir_outer, bg=C["dark"], width=5).pack(side=tk.LEFT, fill=tk.Y)
 
         dir_inner = tk.Frame(dir_outer, bg=C["white"])
@@ -444,21 +443,38 @@ class GravadorApp:
             self._dot_cv.itemconfig(self._dot, fill=clr)
         self.root.after(0, _upd)
 
-    # ─── Janela de "Processando..." ───────────────────────────────────────────
+    def _set_progress(self, value: int, step_text: str) -> None:
+        """Atualiza a barra de progresso determinística de qualquer thread (thread-safe)."""
+        def _upd():
+            if self._progress_var is not None:
+                self._progress_var.set(value)
+            if self._progress_pct_lbl is not None:
+                try:
+                    self._progress_pct_lbl.config(text=f"{value}%")
+                except Exception:
+                    pass
+            if self._proc_step_lbl is not None:
+                try:
+                    self._proc_step_lbl.config(text=step_text)
+                except Exception:
+                    pass
+        self.root.after(0, _upd)
 
-    def _mostrar_janela_processando(self, texto_inicial: str) -> None:
+    # ─── Janela de processamento ──────────────────────────────────────────────
+
+    def _mostrar_janela_processando(self, titulo: str) -> None:
         if self._proc_win is not None:
             return
 
         win = tk.Toplevel(self.root)
-        win.title("Processando...")
+        win.title("Gerando pacote de suporte...")
         win.configure(bg=C["white"])
         win.resizable(False, False)
         win.transient(self.root)
         win.attributes("-topmost", True)
         win.protocol("WM_DELETE_WINDOW", self._bloquear_fechamento_processando)
 
-        WIN_W, WIN_H = 380, 150
+        WIN_W, WIN_H = 460, 220
         x = (self._screen_w - WIN_W) // 2
         y = (self._screen_h - WIN_H) // 2
         win.geometry(f"{WIN_W}x{WIN_H}+{x}+{y}")
@@ -467,18 +483,46 @@ class GravadorApp:
             win, text="⏳  Gerando o pacote de suporte...",
             bg=C["white"], fg=C["dark"],
             font=("Segoe UI", 11, "bold"),
-        ).pack(pady=(18, 4))
+        ).pack(pady=(18, 2))
 
+        # Descrição (qtd de vídeos + HAR)
         self._proc_lbl = tk.Label(
-            win, text=texto_inicial,
+            win, text=titulo,
             bg=C["white"], fg=C["subtext"],
             font=("Segoe UI", 9),
         )
         self._proc_lbl.pack(pady=(0, 10))
 
-        barra = ttk.Progressbar(win, mode="indeterminate", length=300)
-        barra.pack(pady=(0, 10))
-        barra.start(12)
+        # ✅ Barra determinística com percentual
+        self._progress_var = tk.IntVar(value=0)
+        barra = ttk.Progressbar(
+            win, mode="determinate", length=400,
+            variable=self._progress_var, maximum=100,
+        )
+        barra.pack(padx=28, pady=(0, 4))
+
+        # Linha de percentual + descrição da etapa
+        pct_row = tk.Frame(win, bg=C["white"])
+        pct_row.pack(fill=tk.X, padx=30)
+
+        self._progress_pct_lbl = tk.Label(
+            pct_row, text="0%",
+            bg=C["white"], fg=C["dark"],
+            font=("Segoe UI", 9, "bold"),
+            anchor="w",
+        )
+        self._progress_pct_lbl.pack(side=tk.LEFT)
+
+        self._proc_step_lbl = tk.Label(
+            pct_row, text="Iniciando...",
+            bg=C["white"], fg=C["subtext"],
+            font=("Segoe UI", 8),
+            anchor="e",
+        )
+        self._proc_step_lbl.pack(side=tk.RIGHT)
+
+        # Separador
+        tk.Frame(win, bg=C["gray"], height=1).pack(fill=tk.X, padx=28, pady=(14, 8))
 
         tk.Label(
             win, text="⚠️  Não feche o aplicativo até esta janela desaparecer.",
@@ -489,13 +533,6 @@ class GravadorApp:
         win.grab_set()
         self._proc_win = win
 
-    def _atualizar_janela_processando(self, texto: str) -> None:
-        if self._proc_lbl is not None:
-            try:
-                self._proc_lbl.config(text=texto)
-            except Exception:
-                pass
-
     def _fechar_janela_processando(self) -> None:
         if self._proc_win is not None:
             try:
@@ -503,8 +540,11 @@ class GravadorApp:
                 self._proc_win.destroy()
             except Exception:
                 pass
-            self._proc_win = None
-            self._proc_lbl = None
+            self._proc_win      = None
+            self._proc_lbl      = None
+            self._progress_var  = None
+            self._progress_pct_lbl = None
+            self._proc_step_lbl = None
 
     def _bloquear_fechamento_processando(self) -> None:
         messagebox.showwarning(
@@ -514,6 +554,45 @@ class GravadorApp:
             "ou os arquivos serão perdidos.",
             parent=self._proc_win,
         )
+
+    # ─── Timer de gravação + blink ────────────────────────────────────────────
+
+    def _elapsed_str(self) -> str:
+        if not self._recording_start:
+            return "00:00:00"
+        elapsed = int((datetime.now() - self._recording_start).total_seconds())
+        h = elapsed // 3600
+        m = (elapsed % 3600) // 60
+        s = elapsed % 60
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
+    def _tick_timer(self) -> None:
+        if not self._gravando:
+            return
+        n = len(self._pages)
+        plural = "s" if n != 1 else ""
+
+        # Blink no dot da status bar
+        self._blink_state = not self._blink_state
+        self._dot_cv.itemconfig(self._dot, fill=C["red"] if self._blink_state else "#8b0000")
+        self.lbl_status.config(
+            text=f"GRAVANDO — {n} aba{plural} | {self._elapsed_str()}",
+            fg=C["red"],
+        )
+
+        # Atualiza label de contagem de abas no body
+        if self._tab_count_lbl:
+            self._tab_count_lbl.config(
+                text=f"📑  {n} aba{plural} sendo gravada{plural}",
+            )
+
+        self._timer_id = self.root.after(1000, self._tick_timer)
+
+    def _parar_timer(self) -> None:
+        if self._timer_id:
+            self.root.after_cancel(self._timer_id)
+            self._timer_id = None
+        self._dot_cv.itemconfig(self._dot, fill=C["orange"])
 
     # ─── Iniciar ──────────────────────────────────────────────────────────────
 
@@ -531,6 +610,7 @@ class GravadorApp:
         self._video_dir = os.path.join(self._tmp_dir, "video")
         os.makedirs(self._video_dir, exist_ok=True)
 
+        self._pages = []
         self._stop_event.clear()
         self._gravando = True
         self._salvando = False
@@ -571,57 +651,95 @@ class GravadorApp:
         self._context = await self._browser.new_context(
             record_har_path=self._har_path,
             record_video_dir=self._video_dir,
-            record_video_size={"width": self._screen_w, "height": self._screen_h},
+            # ✅ FIX 1: resolução fixa → FFmpeg sempre usa fast path (zero re-encode)
+            record_video_size={"width": VIDEO_W, "height": VIDEO_H},
             no_viewport=True,
         )
 
+        # ✅ Multi-tab: captura qualquer aba aberta pelo usuário (Ctrl+T, window.open, etc.)
+        self._context.on("page", self._on_new_page)
+
         self._page = await self._context.new_page()
+        self._pages = [self._page]
         await self._page.goto("https://google.com")
 
+        # Inicia timer e habilita botão Parar
+        self._recording_start = datetime.now()
         self.root.after(0, lambda: self._btn_enable(self.btn_parar, C["red"]))
-        self._set_status("GRAVANDO — Realize o teste no navegador.", "red")
+        self.root.after(0, self._tick_timer)
 
         while not self._stop_event.is_set():
             await asyncio.sleep(0.3)
 
         await self._fechar_tudo_async()
 
+    def _on_new_page(self, page) -> None:
+        """Callback síncrono do Playwright: chamado ao abrir qualquer nova aba."""
+        if page not in self._pages:
+            self._pages.append(page)
+
     # ─── Parar ────────────────────────────────────────────────────────────────
 
     def parar_fluxo(self):
-        if self._salvando:
+        if self._salvando or not self._gravando:
             return
         self._salvando = True
         self._gravando = False
+        self._parar_timer()
         self._btn_disable(self.btn_parar)
+        if self._tab_count_lbl:
+            self._tab_count_lbl.config(text="")
         self._set_status("Encerrando gravação...", "orange")
         self._stop_event.set()
 
     # ─── Fechar Playwright ────────────────────────────────────────────────────
 
     async def _fechar_tudo_async(self):
-        video_path: str | None = None
-
-        try:
-            if self._page and self._page.video:
-                video_path = await self._page.video.path()
-        except Exception:
-            pass
-
-        if not video_path or not os.path.exists(video_path):
+        # ── 1. Coleta paths de vídeo de TODAS as abas rastreadas (antes do close)
+        video_paths: list[str] = []
+        for page in self._pages:
             try:
-                files = [
-                    os.path.join(self._video_dir, f)
-                    for f in os.listdir(self._video_dir)
-                    if f.endswith(".webm")
-                ]
-                if files:
-                    video_path = max(files, key=os.path.getmtime)
+                if page.video:
+                    vp = await page.video.path()
+                    if vp and vp not in video_paths:
+                        video_paths.append(vp)
             except Exception:
                 pass
 
+        # ── 2. context.close() finaliza HAR + todos os vídeos no disco
+        try:
+            if self._context:
+                await self._context.close()
+        except Exception:
+            pass
+
+        # ── 3. Fallback: varre diretório para capturar abas não rastreadas pelo evento
+        try:
+            for f in sorted(os.listdir(self._video_dir)):
+                if f.endswith(".webm"):
+                    full = os.path.join(self._video_dir, f)
+                    if full not in video_paths and os.path.exists(full):
+                        video_paths.append(full)
+        except Exception:
+            pass
+
+        # Ordena por mtime → preserva a ordem de abertura das abas
+        video_paths = [p for p in video_paths if os.path.exists(p)]
+        video_paths.sort(key=os.path.getmtime)
+
+        self._set_progress(12, "Encerrando navegador...")
+
+        # ✅ FIX 2: HAR finalizado no disco → processa em paralelo com browser.close()
+        har_result: list[str | None] = [None]
+        har_done = threading.Event()
+
+        def _har_worker() -> None:
+            har_result[0] = self._gerar_html_har(self._har_path)
+            har_done.set()
+
+        threading.Thread(target=_har_worker, daemon=True).start()
+
         for obj, method in [
-            (self._context,    "close"),
             (self._browser,    "close"),
             (self._playwright, "stop"),
         ]:
@@ -631,82 +749,161 @@ class GravadorApp:
             except Exception:
                 pass
 
-        self.root.after(0, lambda: self._iniciar_processamento(video_path))
+        n = len(video_paths)
+        self._set_progress(22, f"Navegador encerrado — {n} vídeo(s) para processar...")
+
+        self.root.after(
+            0,
+            lambda vps=video_paths, hr=har_result, hd=har_done: (
+                self._iniciar_processamento(vps, hr, hd)
+            ),
+        )
 
     # ─── Processamento ────────────────────────────────────────────────────────
 
-    def _iniciar_processamento(self, video_path: str | None):
-        self._set_status("Processando vídeo (1.5×)...", "blue")
-        self._mostrar_janela_processando("Acelerando e ajustando o vídeo...")
-        threading.Thread(target=self._processar_em_thread, args=(video_path,), daemon=True).start()
+    def _iniciar_processamento(
+        self,
+        video_paths: list[str],
+        har_result: list[str | None],
+        har_done: threading.Event,
+    ) -> None:
+        n = len(video_paths)
+        desc = (
+            f"Processando {n} vídeo(s) e relatório de rede..."
+            if n else "Processando relatório de rede..."
+        )
+        self._mostrar_janela_processando(desc)
+        threading.Thread(
+            target=self._processar_em_thread,
+            args=(video_paths, har_result, har_done),
+            daemon=True,
+        ).start()
 
-    def _processar_em_thread(self, video_path: str | None):
-        resultado: dict[str, str | None] = {"video": None, "har": None}
-        video_final: str | None = None
-        har_html:    str | None = None
+    def _processar_em_thread(
+        self,
+        video_paths: list[str],
+        har_result: list[str | None],
+        har_done: threading.Event,
+    ) -> None:
+        erros: list[str] = []
+        zip_filename: str = ""
+        zip_size_str: str = ""
+        n_tabs_ok: int    = 0
+
+        n_videos = len(video_paths)
+        video_results: list[str | None] = [None] * max(n_videos, 1)
+        video_threads: list[threading.Thread] = []
 
         try:
-            def _tarefa_video():
-                resultado["video"] = self._acelerar_video(video_path)
+            self._set_status("Processando arquivos...", "blue")
+            self._set_progress(25, f"Processando {n_videos} vídeo(s) em paralelo...")
 
-            def _tarefa_har():
-                resultado["har"] = self._gerar_html_har(self._har_path)
+            # ✅ Multi-tab: uma thread por vídeo (abas processadas em paralelo)
+            for idx in range(n_videos):
+                vp = video_paths[idx]
 
-            self.root.after(0, lambda: self._atualizar_janela_processando(
-                "Acelerando o vídeo e gerando o relatório de rede..."
-            ))
-            self._set_status("Processando vídeo e relatório...", "blue")
+                def _video_worker(path=vp, i=idx) -> None:
+                    video_results[i] = self._acelerar_video(path, i)
 
-            t_video = threading.Thread(target=_tarefa_video, daemon=True)
-            t_har   = threading.Thread(target=_tarefa_har,   daemon=True)
-            t_video.start()
-            t_har.start()
-            t_video.join()
-            t_har.join()
+                t = threading.Thread(target=_video_worker, daemon=True)
+                video_threads.append(t)
+                t.start()
 
-            self.root.after(0, lambda: self._atualizar_janela_processando("Compactando arquivos..."))
+            # ✅ FIX 2: HAR já processa desde context.close() → wait() quase imediato
+            har_done.wait(timeout=30)
+            self._set_progress(52, "Relatório HTML pronto. Aguardando vídeo(s)...")
+
+            for t in video_threads:
+                t.join()
+
+            self._set_progress(68, "Vídeo(s) processado(s). Montando ZIP...")
             self._set_status("Compactando arquivos...", "blue")
 
-            video_final = resultado["video"]
-            har_html    = resultado["har"]
-        except Exception:
-            video_final = video_final or resultado.get("video")
-            har_html    = har_html or resultado.get("har")
+            # ── Monta lista de arquivos para o ZIP ───────────────────────────
+            timestamp    = datetime.now().strftime("%d%m%Y-%H%M%S")
+            zip_filename = f"{timestamp}.zip"
+            zip_path     = os.path.join(OUTPUT_DIR, zip_filename)
+            arquivos_zip: list[tuple[str, str]] = []
+
+            har_html = har_result[0]
+            if har_html and os.path.exists(har_html):
+                arquivos_zip.append((har_html, f"{timestamp}_relatorio.html"))
+            else:
+                erros.append("⚠️ Relatório HTML não foi gerado.")
+
+            valid_videos = [vr for vr in video_results if vr and os.path.exists(vr)]
+            n_tabs_ok = len(valid_videos)
+
+            if valid_videos:
+                for i, vp in enumerate(valid_videos):
+                    suffix    = "_1.5x" if "acelerado" in vp else ""
+                    tab_label = f"_aba{i + 1}" if len(valid_videos) > 1 else ""
+                    arquivos_zip.append((vp, f"{timestamp}_video{tab_label}{suffix}.webm"))
+            else:
+                erros.append("⚠️ Nenhum vídeo foi gerado.")
+
+            # ── Cria o ZIP com progresso por arquivo ─────────────────────────
+            if arquivos_zip:
+                try:
+                    with zipfile.ZipFile(zip_path, "w") as zf:
+                        n_files = len(arquivos_zip)
+                        for file_idx, (filepath, arcname) in enumerate(arquivos_zip):
+                            pct   = 70 + int((file_idx / n_files) * 22)
+                            short = arcname if len(arcname) <= 40 else arcname[:37] + "..."
+                            self._set_progress(pct, f"Compactando: {short}")
+                            if arcname.endswith(".webm"):
+                                # .webm já comprimido → ZIP_STORED evita CPU desnecessária
+                                zf.write(filepath, arcname, compress_type=zipfile.ZIP_STORED)
+                            else:
+                                zf.write(filepath, arcname, compress_type=zipfile.ZIP_DEFLATED, compresslevel=6)
+
+                    size_bytes   = os.path.getsize(zip_path)
+                    zip_size_str = _fmt_size(size_bytes)
+                    self._set_progress(93, f"ZIP criado — {zip_size_str}")
+                except Exception as exc:
+                    erros.append(f"❌ Erro ao criar ZIP: {exc}")
+                    zip_filename = ""
+
+            # ── Limpeza ───────────────────────────────────────────────────────
+            self._set_progress(96, "Limpando arquivos temporários...")
+            if not _safe_rmtree(self._tmp_dir):
+                erros.append(
+                    "⚠️ Não foi possível apagar os arquivos temporários "
+                    "(serão removidos na próxima abertura do SupTrace)."
+                )
+
+            self._set_progress(100, "✅ Concluído!")
+
+        except Exception as exc:
+            erros.append(f"❌ Erro inesperado: {exc}")
+            for t in video_threads:
+                if t.is_alive():
+                    t.join(timeout=60)
+
         finally:
+            # 700ms para o usuário ver o 100% antes da janela fechar
             self.root.after(
-                0,
-                lambda vf=video_final, hh=har_html: self._salvar_arquivos_finais(vf, hh),
+                700,
+                lambda: self._mostrar_resultado_final(erros, zip_filename, zip_size_str, n_tabs_ok),
             )
 
-    # ─── Acelerar + normalizar vídeo ─────────────────────────────────────────
+    # ─── Acelerar vídeo ───────────────────────────────────────────────────────
 
-    def _acelerar_video(self, input_path: str | None) -> str | None:
+    def _acelerar_video(self, input_path: str | None, idx: int = 0) -> str | None:
         if not input_path or not os.path.exists(input_path):
             return input_path
         if not FFMPEG_EXE:
             return input_path
 
-        # Atalho: sem aceleração E sem reescala → devolve o original intacto
-        needs_scale = (self._screen_w, self._screen_h) != (VIDEO_W, VIDEO_H)
+        # ✅ FIX 1 → needs_scale sempre False; idx no nome evita colisão entre abas
+        needs_scale = False
         if VIDEO_SPEED == 1.0 and not needs_scale:
             return input_path
 
-        output_path = os.path.join(self._tmp_dir, "video_acelerado.webm")
+        output_path = os.path.join(self._tmp_dir, f"video_acelerado_{idx}.webm")
 
         if not needs_scale:
-            # ✅ FAST PATH — manipula somente os timestamps do container WebM.
-            #
-            # -itsscale reescala cada PTS/DTS de entrada antes de passá-lo
-            # ao muxer: PTS_saída = PTS_entrada × (1 / VIDEO_SPEED).
-            # Com timestamps menores, o player reproduz os frames mais rápido.
-            #
-            # -c:v copy → bitstream VP8/VP9 copiado byte-a-byte.
-            # Nenhum frame é decodificado ou reencodado.
-            # Custo: praticamente só I/O de disco.
-            # Resultado: ~15–20 s de FFmpeg → < 1 s para qualquer duração.
-            #
-            # -probesize / -analyzeduration cortam o tempo de análise inicial
-            # do container (padrão 5 MB / 5 s → reduzido para 500 KB / 0,1 s).
+            # ✅ FAST PATH: manipula apenas timestamps → zero re-encode, puro I/O
             cmd = [
                 FFMPEG_EXE,
                 "-probesize",        "500000",
@@ -719,8 +916,7 @@ class GravadorApp:
                 "-y",                output_path,
             ]
         else:
-            # SLOW PATH — resolução diferente: re-encode inevitável.
-            # Usa VP8 "realtime" + cpu-used 8 para minimizar o tempo de encode.
+            # SLOW PATH (salvaguarda para alterações futuras em VIDEO_W/H)
             cmd = [
                 FFMPEG_EXE,
                 "-probesize",       "500000",
@@ -740,7 +936,44 @@ class GravadorApp:
             )
             return output_path if os.path.exists(output_path) else input_path
         except Exception:
-            return input_path  # degradação silenciosa: devolve o .webm original
+            return input_path
+
+    # ─── Resultado final ──────────────────────────────────────────────────────
+
+    def _mostrar_resultado_final(
+        self,
+        erros: list[str],
+        zip_filename: str,
+        zip_size_str: str,
+        n_tabs: int,
+    ) -> None:
+        self._fechar_janela_processando()
+
+        tab_info  = f"\n🎥 Abas gravadas: {n_tabs}" if n_tabs > 1 else ""
+        size_info = f"\n📏 Tamanho:   {zip_size_str}"  if zip_size_str else ""
+
+        if erros and not zip_filename:
+            messagebox.showerror("Erro ao gerar o pacote", "\n".join(erros))
+        elif erros:
+            messagebox.showwarning(
+                "Concluído com avisos",
+                "\n".join(erros) + f"\n\n📁 Pasta:   {OUTPUT_DIR}\n📦 Arquivo: {zip_filename}",
+            )
+        else:
+            messagebox.showinfo(
+                "✅ Gravação concluída!",
+                f"Pacote gerado com sucesso!\n\n"
+                f"📁 Pasta:   {OUTPUT_DIR}\n"
+                f"📦 Arquivo: {zip_filename}"
+                f"{size_info}"
+                f"{tab_info}\n\n"
+                "Envie o arquivo .zip para a equipe técnica.",
+            )
+
+        status_extra = f" ({zip_size_str})" if zip_size_str else ""
+        self._set_status(f"Concluído → {zip_filename}{status_extra}", "green")
+        self.root.after(0, lambda: self._btn_enable(self.btn_iniciar, C["green"]))
+        self._salvando = False
 
     # ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -766,7 +999,6 @@ class GravadorApp:
     def _gerar_html_har(self, har_path: str) -> str | None:
         if not har_path or not os.path.exists(har_path):
             return None
-
         try:
             with open(har_path, "r", encoding="utf-8") as f:
                 har_data = json.load(f)
@@ -786,7 +1018,8 @@ class GravadorApp:
         count_4xx = sum(1 for e in filtered if 400 <= e.get("response", {}).get("status", 0) < 500)
         count_ok  = total - count_5xx - count_4xx
 
-        rows_html = ""
+        # ✅ FIX 3: lista + join único → O(n) em vez de O(n²)
+        rows: list[str] = []
 
         for i, entry in enumerate(filtered):
             req         = entry.get("request",  {})
@@ -822,7 +1055,7 @@ class GravadorApp:
             resp_body_trunc = resp_body[:10_000]
             resp_truncated  = len(resp_body) > 10_000
 
-            tab_btns = f'<button class="tab-btn active" onclick="showTab(event,\'t{i}_rqh\')">📤 Request Headers</button>'
+            tab_btns     = f'<button class="tab-btn active" onclick="showTab(event,\'t{i}_rqh\')">📤 Request Headers</button>'
             tab_contents = f'<div class="tab-content active" id="t{i}_rqh"><pre>{html_lib.escape(req_hdrs_json)}</pre></div>'
 
             if req_params_str:
@@ -845,7 +1078,7 @@ class GravadorApp:
                 f'{trunc_note}<pre>{html_lib.escape(resp_body_trunc)}</pre></div>'
             )
 
-            rows_html += (
+            rows.append(
                 f'<tr class="req-row" onclick="toggleRow({i})" title="Clique para expandir detalhes">'
                 f'<td><span class="method {mc}">{html_lib.escape(method)}</span></td>'
                 f'<td class="ep-cell" title="{html_lib.escape(url)}">{html_lib.escape(endpoint)}</td>'
@@ -860,6 +1093,7 @@ class GravadorApp:
                 f'</td></tr>'
             )
 
+        rows_html    = "".join(rows)     # ✅ FIX 3: única alocação após o loop
         generated_at = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
         html_doc = f"""<!DOCTYPE html>
@@ -936,69 +1170,7 @@ function filterTable(){{const q=document.getElementById('searchInput').value.toL
         except Exception:
             return None
 
-    # ─── Salvar + ZIP ─────────────────────────────────────────────────────────
-
-    def _salvar_arquivos_finais(self, video_path: str | None, har_html: str | None):
-        timestamp    = datetime.now().strftime("%d%m%Y-%H%M%S")
-        zip_filename = f"{timestamp}.zip"
-        zip_path     = os.path.join(OUTPUT_DIR, zip_filename)
-
-        erros: list[str] = []
-        arquivos_zip: list[tuple[str, str]] = []
-
-        if har_html and os.path.exists(har_html):
-            arquivos_zip.append((har_html, f"{timestamp}_relatorio.html"))
-        else:
-            erros.append("⚠️ Relatório HTML não foi gerado.")
-
-        if video_path and os.path.exists(video_path):
-            suffix = "_1.5x" if "acelerado" in video_path else ""
-            arquivos_zip.append((video_path, f"{timestamp}_video{suffix}.webm"))
-        else:
-            erros.append("⚠️ Arquivo de vídeo não foi gerado.")
-
-        if arquivos_zip:
-            try:
-                with zipfile.ZipFile(zip_path, "w") as zf:
-                    for filepath, arcname in arquivos_zip:
-                        # ✅ .webm já é comprimido — ZIP_STORED evita CPU desnecessária.
-                        # HTML (texto) se beneficia de ZIP_DEFLATED.
-                        if arcname.endswith(".webm"):
-                            zf.write(filepath, arcname, compress_type=zipfile.ZIP_STORED)
-                        else:
-                            zf.write(filepath, arcname, compress_type=zipfile.ZIP_DEFLATED, compresslevel=6)
-            except Exception as exc:
-                erros.append(f"❌ Erro ao criar ZIP: {exc}")
-
-        if not _safe_rmtree(self._tmp_dir):
-            erros.append(
-                "⚠️ Não foi possível apagar todos os arquivos temporários "
-                "(serão limpos automaticamente na próxima abertura do SupTrace)."
-            )
-
-        self._fechar_janela_processando()
-
-        if erros and not arquivos_zip:
-            messagebox.showerror("Erro", "\n".join(erros))
-        elif erros:
-            messagebox.showwarning(
-                "Concluído com avisos",
-                "\n".join(erros) + f"\n\n📁 Pasta:   {OUTPUT_DIR}\n📦 Arquivo: {zip_filename}",
-            )
-        else:
-            messagebox.showinfo(
-                "✅ Gravação concluída!",
-                f"Arquivo salvo com sucesso!\n\n"
-                f"📁 Pasta:   {OUTPUT_DIR}\n"
-                f"📦 Arquivo: {zip_filename}\n\n"
-                "Envie o arquivo .zip para a equipe técnica.",
-            )
-
-        self._set_status(f"Concluído → {zip_filename}", "green")
-        self.root.after(0, lambda: self._btn_enable(self.btn_iniciar, C["green"]))
-        self._salvando = False
-
-    # ─── Fechar janela ────────────────────────────────────────────────────────
+    # ─── Fechar janela principal ──────────────────────────────────────────────
 
     def _on_close(self):
         if self._salvando:
@@ -1012,9 +1184,11 @@ function filterTable(){{const q=document.getElementById('searchInput').value.toL
                 "Os dados NÃO serão salvos. Deseja sair mesmo assim?",
             ):
                 return
+            self._parar_timer()
 
         _safe_rmtree(self._tmp_dir, tentativas=2)
         self.root.destroy()
+
 
 if __name__ == "__main__":
     root = tk.Tk()
