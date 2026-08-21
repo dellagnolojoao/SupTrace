@@ -1,4 +1,4 @@
-# ─── SupTrace v1.2 — .gitignore ──────────────────────────────────────────────
+# ─── SupTrace v1.3 — .gitignore ──────────────────────────────────────────────
 
 # ─── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
@@ -25,10 +25,24 @@ ms-playwright/
 pw-browsers/
 
 # ─── Artefatos gerados em runtime pela ferramenta ────────────────────────────
+# v1.2: artefatos de sessão única
+# v1.3: múltiplos vídeos por sessão (_aba1, _aba2...) → padrão *.webm já cobre
 *.har
 *.webm
 *.zip
 *.log
+
+# v1.3: relatório HTML gerado dinamicamente por sessão
+relatorio_rede.html
+*_relatorio.html
+
+# ─── Diretórios temporários da aplicação ─────────────────────────────────────
+# v1.3: sessões multi-aba geram subdiretórios de vídeo por contexto
+#       gerados em %LOCALAPPDATA%\SupTrace\tmp — ignorados por segurança
+#       caso algum dev aponte OUTPUT_DIR ou _APP_TMP_ROOT para dentro do projeto
+tmp/
+gravador_suporte_*/
+video/
 
 # ─── Sistema operacional ─────────────────────────────────────────────────────
 .DS_Store
